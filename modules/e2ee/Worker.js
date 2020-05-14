@@ -1,5 +1,24 @@
 // Worker for E2EE/Insertable streams. Currently served as an inline blob.
 const code = `
+    // Polyfill RTCEncoded(Audio|Video)Frame.getMetadata() (not available in M83, M84+)
+    if (window.RTCEncodedAudioFrame && !('getMetadata' in RTCEncodedAudioFrame.prototype)) {
+        RTCEncodedAudioFrame.prototype.getMetadata = function() {
+            return {
+                synchronizationSource: this.synchronizationSource,
+                contributingSources: this.contributingSources
+            }
+        };
+    }
+    if (window.RTCEncodedVideoFrame && !('getMetadata' in RTCEncodedVideoFrame.prototype)) {
+        RTCEncodedVideoFrame.prototype.getMetadata = function() {
+            return {
+                // TODO: provide a more complete polyfill based on additionalData.
+                synchronizationSource: this.synchronizationSource,
+                contributingSources: this.contributingSources
+            }
+        }
+    }
+
     // We use a ringbuffer of keys so we can change them and still decode packets that were
     // encrypted with an old key.
     // In the future when we dont rely on a globally shared key we will actually use it. For
@@ -183,7 +202,7 @@ const code = `
             const keyIndex = this._currentKeyIndex % this._cryptoKeyRing.length;
 
             if (this._cryptoKeyRing[keyIndex]) {
-                const iv = this.makeIV(encodedFrame.synchronizationSource, encodedFrame.timestamp);
+                const iv = this.makeIV(encodedFrame.getMetadata().synchronizationSource, encodedFrame.timestamp);
 
                 return crypto.subtle.encrypt({
                     name: 'AES-GCM',
